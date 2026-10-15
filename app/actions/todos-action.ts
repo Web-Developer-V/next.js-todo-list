@@ -1,5 +1,6 @@
 "use server";
 
+import { getAppUser } from "@/lib/supabase/app-user";
 import { createClient } from "@/lib/supabase/server";
 import { format } from "date-fns";
 
@@ -16,10 +17,7 @@ interface Todo {
 
 export async function migrateTodos(todos: Todo[]) {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAppUser();
 
   if (!user) {
     return { isLoggedIn: false };
@@ -48,9 +46,7 @@ export async function migrateTodos(todos: Todo[]) {
 
 export async function createTodo(todo: Todo) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAppUser();
 
   if (!user) {
     return { isLoggedIn: false };
@@ -77,9 +73,7 @@ export async function createTodo(todo: Todo) {
 
 export async function updateTodo(id: Todo["id"], content: string, priority: string, date: Date, start_time?: string | null, end_time?: string | null, all_day?: boolean) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAppUser();
 
   if (!user) {
     return { isLoggedIn: false };
@@ -107,28 +101,24 @@ export async function updateTodo(id: Todo["id"], content: string, priority: stri
 
 export async function deleteTodo(id: Todo["id"]) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAppUser();
 
   if (!user) {
     return { isLoggedIn: false };
   }
 
-  const { error } = await supabase.from("Todos").delete().eq("id", id);
+  const { error } = await supabase.from("Todos").delete().eq("id", id).eq("user_id", user.id);
 
   if (error) {
     throw new Error(`${error.code} : ${error.message}`);
   }
 
-  return { isLOggedIn: true };
+  return { isLoggedIn: true };
 }
 
 export async function completeTodo(id: Todo["id"], complete: Todo["complete"]) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAppUser();
 
   if (!user) {
     return { isLoggedIn: false };
@@ -139,7 +129,8 @@ export async function completeTodo(id: Todo["id"], complete: Todo["complete"]) {
     .update({
       complete,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", user.id);
 
   if (error) {
     throw new Error(`${error.code} : ${error.message}`);
@@ -150,10 +141,7 @@ export async function completeTodo(id: Todo["id"], complete: Todo["complete"]) {
 
 export async function getTodos() {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAppUser();
 
   if (!user) {
     return [];

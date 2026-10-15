@@ -15,33 +15,53 @@ export async function GET(request: NextRequest) {
 
   if (!tokenHash || type !== "email") {
     redirectUrl.pathname = "/sign-up/error";
-    return NextResponse.redirect(redirectUrl);
+
+    const response = NextResponse.redirect(redirectUrl);
+    response.cookies.set("signup-error", "1", {
+      path: redirectUrl.pathname,
+      maxAge: 60,
+      httpOnly: true,
+      sameSite: "lax",
+    });
+
+    return response;
   }
 
   const supabase = await createClient();
 
-  const { data, error } = await supabase.auth.verifyOtp({
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.verifyOtp({
     token_hash: tokenHash,
     type: "email",
   });
 
-  if (error || !data.user) {
+  if (error || !user) {
     redirectUrl.pathname = "/sign-up/error";
-    return NextResponse.redirect(redirectUrl);
+
+    const response = NextResponse.redirect(redirectUrl);
+    response.cookies.set("signup-error", "1", {
+      path: redirectUrl.pathname,
+      maxAge: 60,
+      httpOnly: true,
+      sameSite: "lax",
+    });
+
+    return response;
   }
 
-  const user = data.user;
-  const nickname = user.user_metadata?.nickname;
-
-  const { error: profilleError } = await supabase.from("profiles").insert({
-    id: user.id,
-    nickname,
+  await supabase.auth.signOut({
+    scope: "local",
   });
 
-  if (profilleError) {
-    redirectUrl.pathname = "/sign-up/error";
-    return NextResponse.redirect(redirectUrl);
-  }
+  const response = NextResponse.redirect(redirectUrl);
+  response.cookies.set("signup-verified", "1", {
+    path: "/sign-up/verified",
+    maxAge: 60,
+    httpOnly: true,
+    sameSite: "lax",
+  });
 
-  return NextResponse.redirect(redirectUrl);
+  return response;
 }

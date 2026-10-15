@@ -1,4 +1,4 @@
-import AuthMenu from "../auth/auth-menu";
+import AuthMenu from "./auth-menu";
 
 export default function Header() {
   return (

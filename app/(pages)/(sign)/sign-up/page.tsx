@@ -18,24 +18,30 @@ import { useState } from "react";
 import Terms from "../../../components/modal/terms";
 import Privacy from "../../../components/modal/privacy";
 import { useModalStore } from "@/app/store/modal-store";
+import { isValidPassword } from "@/lib/password-validation";
+import { isValidEmail } from "@/lib/email-pattern";
+
+import { motion } from "motion/react";
+import { LoaderCircle } from "lucide-react";
 
 const privacyButtonCss = "relative inline-block cursor-pointer text-(--primary) font-medium hover:text-[#4471e2] transition-colors before:absolute before:w-full before:h-[1px] before:left-0 before:top-full before:bg-(--primary)";
+
+const AnimatedCheck = motion(LoaderCircle);
 
 export default function SignUpPage() {
   const openModal = useModalStore((state) => state.openModal);
   const setIsClose = useModalStore((state) => state.setIsOpen);
+  const [isLoading, setIsLoading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [alreadyEmail, setAlreadyEmail] = useState(false);
   const [values, setValues] = useState({
     name: "",
-    nickname: "",
     email: "",
     password: "",
     passwordValidate: "",
   });
   const [validate, setValidate] = useState({
     name: false,
-    nickname: false,
-    duplicationNickname: false,
     email: false,
     password: false,
     passwordValidate: false,
@@ -44,32 +50,19 @@ export default function SignUpPage() {
 
   const router = useRouter();
 
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
-
   const signUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const formData = new FormData(e.currentTarget);
 
     const name = formData.get("name") as string;
-    const nickname = formData.get("nickname") as string;
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
-    const { data: existingProfiles, error: nicknameError } = await supabase.from("profiles").select("id, nickname").eq("nickname", nickname.trim());
-
-    if (nicknameError) {
-      alert("닉네임 중복 확인에 실패했습니다.");
-      return;
-    }
-
     const nextValidate = {
       name: values.name.trim() == "",
-      nickname: values.nickname.trim() === "",
-      duplicationNickname: existingProfiles.length > 0,
-      email: !emailPattern.test(values.email.trim()),
-      password: !passwordPattern.test(values.password),
+      email: !isValidEmail(values.email.trim()),
+      password: !isValidPassword(values.password),
       passwordValidate: values.password !== values.passwordValidate,
       terms: !termsAccepted,
     };
@@ -80,23 +73,44 @@ export default function SignUpPage() {
       return;
     }
 
-    const { error } = await supabase.auth.signUp({
+    setIsLoading(true);
+
+    sessionStorage.setItem("verification-email", email);
+    document.cookie = `verification-email=${encodeURIComponent(email)}; path=/; Max-Age=600; SameSite=Lax`;
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           name,
-          nickname,
+          hasPassword: true,
         },
         emailRedirectTo: `${window.location.origin}/auth/confirm`,
       },
     });
 
     if (error) {
+      setIsLoading(false);
       alert(`회원가입에 실패했습니다. : ${error}`);
       return;
     }
 
+    if (user?.identities?.length === 0) {
+      setIsLoading(false);
+      setAlreadyEmail(true);
+      return;
+    }
+
+    setAlreadyEmail(false);
+
+    localStorage.setItem("email-resend-mode", "waiting");
+    localStorage.setItem("email-resend-until", String(Date.now() + 60_000));
+
+    document.cookie = "signup-complete-access=1; path=/sign-up/complete; Max-Age=60; SameSite=Lax";
     router.push("/sign-up/complete");
   };
 
@@ -110,7 +124,7 @@ export default function SignUpPage() {
       };
 
       if (id === "password") {
-        next.password = value !== "" && !passwordPattern.test(value);
+        next.password = value !== "" && !isValidPassword(value);
         next.passwordValidate = values.passwordValidate !== "" && value !== values.passwordValidate;
       }
 
@@ -147,13 +161,9 @@ export default function SignUpPage() {
             {validate.name ? <p className="mt-1.5 text-[12px] text-red-400">이름을 필수로 입력해주세요.</p> : null}
           </div>
           <div>
-            <SignInput id="nickname" name="nickname" type="text" placeholder="닉네임을 입력하세요." onChange={validateHandler} />
-            {validate.nickname ? <p className="mt-1.5 text-[12px] text-red-400">닉네임을 필수로 입력해주세요.</p> : null}
-            {validate.duplicationNickname ? <p className="mt-1.5 text-[12px] text-red-400">이미 사용중인 닉네임입니다.</p> : null}
-          </div>
-          <div>
             <SignInput id="email" name="email" type="text" placeholder="이메일을 입력하세요." onChange={validateHandler} />
             {validate.email ? <p className="mt-1.5 text-[12px] text-red-400">올바른 이메일 주소를 입력해주세요.</p> : null}
+            {alreadyEmail ? <p className="mt-1.5 text-[12px] text-red-400">이미 등록된 이메일입니다.</p> : null}
           </div>
           <div>
             <SignInput id="password" name="password" type="password" placeholder="비밀번호를 입력하세요." onChange={validateHandler} />
@@ -180,13 +190,27 @@ export default function SignUpPage() {
             </Field>
             {validate.terms ? <p className="mt-2 text-[12px] text-red-400">약관 및 개인정보처리방침에 동의해주세요.</p> : null}
           </div>
-          <SignFormButton>회원가입</SignFormButton>
+          {isLoading ? (
+                    <SignFormButton disabled>
+                      <div className="flex items-center justify-center h-10">
+                        <AnimatedCheck size={24} className="animate-spin text-gray-300" />
+                      </div>
+                    </SignFormButton>
+                  ) : (
+                    <SignFormButton>회원가입</SignFormButton>
+                  )}
         </SignForm>
-        <p className="mt-4 text-sm text-slate-400">
+        <p className="mt-4 text-sm text-slate-400 text-center">
           이미 계정이 있으신가요?
           <Link href="/sign-in" className="ml-1 text-primary font-medium hover:text-[#4471e2] transition-colors">
             로그인
           </Link>
+        </p>
+        <p className="mt-1 text-center text-sm text-slate-400">
+          <Link href="/" className="ml-1 text-primary font-medium hover:text-[#4471e2] transition-colors">
+            홈
+          </Link>
+          으로 돌아가기
         </p>
       </SignSection>
     </>

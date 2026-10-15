@@ -10,7 +10,16 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      return NextResponse.redirect(new URL("/", requestUrl));
+      const response = NextResponse.redirect(new URL("/", requestUrl));
+
+      response.cookies.set("oauth-login-event", "1", {
+        path: "/",
+        maxAge: 10,
+        httpOnly: false,
+        sameSite: "lax",
+      });
+
+      return response;
     }
   }
 

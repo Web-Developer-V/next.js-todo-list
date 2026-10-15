@@ -165,7 +165,7 @@ export default function ListEdit({ listId }: Props) {
         </Field>
         <div className="flex justify-end gap-x-2.5">
           <button className="w-full max-w-18 h-8.75 bg-primary text-white rounded-[10px] cursor-pointer transition-colors text-[14px] hover:bg-[#4573e9]">수정</button>
-          <button onClick={close} className="w-full max-w-18 h-8.75 bg-white border border-gray-200 rounded-[10px] cursor-pointer transition-colors text-[14px] hover:bg-[#f4f4f4]">
+          <button onClick={close} type="button" className="w-full max-w-18 h-8.75 bg-white border border-gray-200 rounded-[10px] cursor-pointer transition-colors text-[14px] hover:bg-[#f4f4f4]">
             취소
           </button>
         </div>

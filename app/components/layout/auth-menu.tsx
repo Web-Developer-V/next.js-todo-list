@@ -1,13 +1,17 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { User } from "@supabase/supabase-js";
 import SignInButton from "./sign-in-button";
-import SignOutButton from "./sign-out-button";
-import { useEffect, useState } from "react";
-import SignUpButton from "./sign-up-button";
+import SignUpButton from "../layout/sign-up-button";
+import MyPageButton from "./my-page-button";
+import SignOutButton from "../layout/sign-out-button";
+import HomeButton from "./home-button";
 import { useTodoStore } from "@/app/store/todo-store";
-import AuthMenuSkeleton from "./skeleton/auth-menu-skeleton";
+import AuthMenuSkeleton from "../auth/skeleton/auth-menu-skeleton";
+import { usePathname, useRouter } from "next/navigation";
+import UserInfo from "./user-info";
 
 interface Todo {
   id: string | number;
@@ -18,12 +22,22 @@ interface Todo {
 }
 
 export default function AuthMenu() {
+  const router = useRouter();
+  const path = usePathname();
   const { setLists } = useTodoStore();
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    const isRecoveryMode = () => document.cookie.split("; ").some((cookie) => cookie === "recovery-mode-ui=1");
+
     const getUser = async () => {
+      if (isRecoveryMode()) {
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -37,6 +51,11 @@ export default function AuthMenu() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (isRecoveryMode()) {
+        setUser(null);
+        return;
+      }
+
       setUser(session?.user ?? null);
     });
 
@@ -65,6 +84,15 @@ export default function AuthMenu() {
     } else {
       setLists([]);
     }
+
+    localStorage.setItem(
+      "login-event",
+      JSON.stringify({
+        type: "SIGNED_OUT",
+        timestamp: Date.now(),
+      }),
+    );
+    router.replace("/sign-in");
   };
 
   return (
@@ -72,7 +100,11 @@ export default function AuthMenu() {
       {isLoading ? (
         <AuthMenuSkeleton />
       ) : user ? (
-        <SignOutButton signOut={signOut} />
+        <div className="flex gap-x-3 items-center">
+          <UserInfo />
+          {path.startsWith("/my-page") ? <HomeButton /> : <MyPageButton />}
+          <SignOutButton signOut={signOut} />
+        </div>
       ) : (
         <div className="flex gap-x-3">
           <SignInButton />

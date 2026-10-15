@@ -1,7 +1,7 @@
 "use client";
 
 import { useTabStore } from "../../store/tab-store";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, ShieldAlert, Pencil } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldContent, FieldTitle, FieldDescription } from "@/components/ui/field";
@@ -17,7 +17,11 @@ import { useModalStore } from "@/app/store/modal-store";
 import ListEdit from "../modal/list-edit";
 
 export default function TodoList() {
-  const { lists, error, isLoading, loadTodos, removeList } = useTodoStore();
+  const lists = useTodoStore((state) => state.lists);
+  const error = useTodoStore((state) => state.error);
+  const loaded = useTodoStore((state) => state.loaded);
+  const loadTodos = useTodoStore((state) => state.loadTodos);
+  const removeList = useTodoStore((state) => state.removeList);
   const { activeTab } = useTabStore();
   const completeList = useTodoStore((state) => state.toggleComplete);
   const openModal = useModalStore((state) => state.openModal);
@@ -29,8 +33,46 @@ export default function TodoList() {
   const [date, setDate] = useState<CalendarDate | null>(today(getLocalTimeZone()));
   const [editListId, setEditListId] = useState<Todo["id"] | null>(null);
 
+  const loadingRef = useRef(false);
+
   useEffect(() => {
-    loadTodos();
+    const reloadTodos = async () => {
+      if (loadingRef.current) {
+        return;
+      }
+
+      loadingRef.current = true;
+
+      try {
+        await loadTodos();
+      } finally {
+        loadingRef.current = false;
+      }
+    };
+
+    const loadListHandler = (e: StorageEvent) => {
+      if (e.key !== "login-event" || !e.newValue) {
+        return;
+      }
+
+      try {
+        const data = JSON.parse(e.newValue);
+
+        if (data.type === "SIGNED_IN" || data.type === "SIGNED_OUT") {
+          reloadTodos();
+        }
+      } catch {
+        return;
+      }
+    };
+
+    window.addEventListener("storage", loadListHandler);
+
+    reloadTodos();
+
+    return () => {
+      window.removeEventListener("storage", loadListHandler);
+    };
   }, [loadTodos]);
 
   const filteredLists = lists.filter((list) => (activeTab === "complete" ? list.complete : activeTab === "process" ? !list.complete : true));
@@ -81,7 +123,7 @@ export default function TodoList() {
   return (
     <>
       {openModal["list-edit"] && editListId !== null && <ListEdit listId={editListId} />}
-      {isLoading ? (
+      {!loaded ? (
         <TodoCalendarSkeleton />
       ) : (
         <article className="p-5 pb-2 max-[481px]:p-3">
@@ -95,7 +137,7 @@ export default function TodoList() {
             리스트를 불러올 수 없습니다. <br />[{error.message}]
           </span>
         </motion.p>
-      ) : isLoading ? (
+      ) : !loaded ? (
         <AnimatePresence mode="wait" initial={false}>
           <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-5">
             <TodoListSkeletonItems count={1} />

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { migrateTodos } from "@/app/actions/todos-action";
 import { supabase } from "@/lib/supabase/client";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import SignSection from "../../../components/sign/sign-section";
 import SignForm from "../../../components/sign/sign-form";
@@ -14,6 +14,11 @@ import SignFormButton from "../../../components/sign/sign-form-button";
 import SignAuth from "../../../components/sign/sign-auth";
 import SignAuthButton from "../../../components/sign/sign-auth-button";
 import SignTitle from "../../../components/sign/sign-title";
+
+import { motion } from "motion/react";
+import { LoaderCircle } from "lucide-react";
+
+const AnimatedCheck = motion(LoaderCircle);
 
 export default function SignInPage() {
   const router = useRouter();
@@ -27,6 +32,14 @@ export default function SignInPage() {
     password: false,
   });
   const [auth, setAuth] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const goToVerifyEmail = (email: string) => {
+    sessionStorage.setItem("verify-email", email);
+
+    document.cookie = "verify-email-access=1; path=/sign-in/verify-email; Max-Age=300; SameSite=Lax";
+    router.replace("/sign-in/verify-email");
+  };
 
   const signIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -49,6 +62,8 @@ export default function SignInPage() {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
+    setIsLoading(true);
+
     const {
       data: { user },
       error,
@@ -58,7 +73,32 @@ export default function SignInPage() {
     });
 
     if (error) {
+      const isEmailNotConfirmed = error.code === "email_not_confirmed" || error.message.toLowerCase().includes("email not confirmed");
+
+      if (isEmailNotConfirmed) {
+        setIsLoading(false);
+        goToVerifyEmail(email);
+        return;
+      }
+
       setAuth(true);
+      setIsLoading(false);
+      return;
+    }
+
+    if (!user) {
+      setAuth(true);
+      setIsLoading(false);
+      return;
+    }
+
+    await fetch("/api/auth/recovery/clear", {
+      method: "POST",
+    });
+
+    if (!user?.email_confirmed_at) {
+      setIsLoading(false);
+      goToVerifyEmail(email);
       return;
     }
 
@@ -76,13 +116,15 @@ export default function SignInPage() {
             }
           }
         } catch (error) {
+          setIsLoading(false);
           alert(`로그인에 실패했습니다. ${error}`);
           return;
         }
       }
     }
 
-    router.push("/");
+    localStorage.setItem("login-event", JSON.stringify({ type: "SIGNED_IN", timestamp: Date.now() }));
+    router.replace("/");
   };
 
   const validateHandler = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,6 +151,7 @@ export default function SignInPage() {
 
     if (error) {
       alert(`로그인에 실패했습니다. : (${error.code}) ${error.message}`);
+      return;
     }
   };
 
@@ -122,6 +165,7 @@ export default function SignInPage() {
 
     if (error) {
       alert(`로그인에 실패했습니다. : (${error.code}) ${error.message}`);
+      return;
     }
   };
 
@@ -135,6 +179,7 @@ export default function SignInPage() {
 
     if (error) {
       alert(`로그인에 실패했습니다. : (${error.code}) ${error.message}`);
+      return;
     }
   };
 
@@ -156,9 +201,26 @@ export default function SignInPage() {
         <div>
           <SignInput id="password" name="password" type="password" placeholder="비밀번호를 입력하세요." onChange={validateHandler} />
           {validate.password && <p className="mt-1.5 text-[12px] text-red-400">비밀번호를 입력해주세요.</p>}
-          {!validate.email && !validate.password && auth && <p className="mt-1.5 text-[12px] text-red-400">이메일 또는 비밀번호가 올바르지 않습니다.</p>}
+          {!validate.email && !validate.password && auth && (
+            <p className="mt-1.5 text-[12px] text-red-400">
+              이메일 또는 비밀번호가 올바르지 않습니다. <br />
+              <p className="mt-1 break-keep">Google, 카카오, 네이버로 가입했다면 해당 로그인 방식으로 로그인 해주세요.</p>
+            </p>
+          )}
         </div>
-        <SignFormButton>로그인</SignFormButton>
+        {isLoading ? (
+          <SignFormButton disabled>
+            <div className="flex items-center justify-center h-10">
+              <AnimatedCheck size={24} className="animate-spin text-gray-300" />
+            </div>
+          </SignFormButton>
+        ) : (
+          <SignFormButton>로그인</SignFormButton>
+        )}
+
+        <Link href="/find-password" className="ml-1 text-center text-[14px] text-primary font-medium hover:text-[#4471e2] transition-colors">
+          비밀번호 찾기
+        </Link>
       </SignForm>
       <p className="relative w-full py-3 text-center before:absolute before:left-0 before:top-[50%] before:w-full before:h-px before:bg-slate-200 before:translate-y-[-50%] before:z-0">
         <span className="relative z-1 bg-white px-2 text-sm text-slate-400">또는</span>
@@ -177,11 +239,17 @@ export default function SignInPage() {
           <span className="ml-2">네이버로 로그인</span>
         </SignAuthButton>
       </SignAuth>
-      <p className="mt-2 text-sm text-slate-400">
+      <p className="mt-2 text-sm text-slate-400 text-center">
         계정이 없으신가요?
         <Link href="/sign-up" className="ml-1 text-primary font-medium hover:text-[#4471e2] transition-colors">
           회원가입
         </Link>
+      </p>
+      <p className="mt-1 text-center text-sm text-slate-400">
+        <Link href="/" className="ml-1 text-primary font-medium hover:text-[#4471e2] transition-colors">
+          홈
+        </Link>
+        으로 돌아가기
       </p>
     </SignSection>
   );

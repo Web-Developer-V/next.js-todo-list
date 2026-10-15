@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { TodayProcessSkeleton } from "./skeleton/todo-list-skeleton";
 
 export default function TodayProcess() {
-  const { lists, isLoading } = useTodoStore();
+  const { lists, loaded } = useTodoStore();
 
   const todayListLength = lists.filter((list) => isToday(list.date)).length;
   const completeLength = lists.filter((list) => list.complete && isToday(list.date)).length;
@@ -16,7 +16,7 @@ export default function TodayProcess() {
   return (
     <article className="">
       <ContentTitle title="오늘의 할 일" />
-      {isLoading ? (
+      {!loaded ? (
         <TodayProcessSkeleton />
       ) : (
         <div className="flex min-h-47.5 w-full items-center justify-between gap-4 rounded-[22px] bg-white p-4 shadow-[0_8px_24px_rgba(71,91,126,0.06)] border border-gray-100 box-border max-[413px]:flex-col">

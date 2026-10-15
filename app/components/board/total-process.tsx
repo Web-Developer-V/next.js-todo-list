@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { TotalProcessSkeleton } from "./skeleton/todo-list-skeleton";
 
 export default function TotalProcess() {
-  const { lists, isLoading } = useTodoStore();
+  const { lists, loaded } = useTodoStore();
 
   const totalLength = lists.length;
   const completeLength = lists.filter((list) => list.complete).length;
@@ -14,7 +14,7 @@ export default function TotalProcess() {
 
   return (
     <>
-      {isLoading ? (
+      {!loaded ? (
         <TotalProcessSkeleton />
       ) : (
         <div className="p-5 border-t border-gray-100">

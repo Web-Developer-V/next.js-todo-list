@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase/client";
-import { completeTodo, createTodo, deleteTodo, getTodos, migrateTodos, updateTodo } from "../actions/todos-action";
+import { completeTodo, createTodo, deleteTodo, getTodos, updateTodo } from "../actions/todos-action";
 import { parseISO } from "date-fns";
 
 export interface Todo {
@@ -16,7 +16,7 @@ export interface Todo {
 
 interface State {
   lists: Todo[];
-  isLoading: boolean;
+  loaded: boolean;
   error: {
     state: boolean;
     message: string | null;
@@ -31,7 +31,7 @@ interface State {
 
 export const useTodoStore = create<State>((set) => ({
   lists: [],
-  isLoading: true,
+  loaded: false,
   error: {
     state: false,
     message: null,
@@ -129,7 +129,6 @@ export const useTodoStore = create<State>((set) => ({
   },
   loadTodos: async () => {
     set({
-      isLoading: true,
       error: {
         state: false,
         message: null,
@@ -151,17 +150,20 @@ export const useTodoStore = create<State>((set) => ({
       } = await supabase.auth.getUser();
 
       if (!user) {
-        set({ lists: localTodos });
+        set({
+          lists: localTodos,
+          loaded: true,
+        });
         return;
       }
 
-      if (localTodos.length > 0) {
-        const result = await migrateTodos(localTodos);
+      // if (localTodos.length > 0) {
+      //   const result = await migrateTodos(localTodos);
 
-        if (result.isLoggedIn) {
-          localStorage.removeItem("todo-list");
-        }
-      }
+      //   if (result.isLoggedIn) {
+      //     localStorage.removeItem("todo-list");
+      //   }
+      // }
 
       const todos = await getTodos();
 
@@ -170,16 +172,16 @@ export const useTodoStore = create<State>((set) => ({
           ...todo,
           date: parseISO(todo.date),
         })),
+        loaded: true,
       });
     } catch (error) {
       set({
+        loaded: true,
         error: {
           state: true,
           message: error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.",
         },
       });
-    } finally {
-      set({ isLoading: false });
     }
   },
 }));

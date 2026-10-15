@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 
 import ScrollProvider from "./components/scroll-provider";
+import MainStorage from "./main-storage";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -28,6 +29,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className={cn("h-full", "antialiased", roboto.variable, notoSansKR.variable, "font-sans", geist.variable)}>
+      <MainStorage />
       <body className="min-h-full flex flex-col justify-center max-[1261px]:px-5 max-[1024px]:px-3">
         <ScrollProvider>{children}</ScrollProvider>
       </body>

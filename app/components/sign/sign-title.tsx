@@ -1,6 +1,6 @@
 interface Props {
   title: string;
-  description: React.ReactNode;
+  description?: React.ReactNode;
 }
 
 export default function SignTitle({ title, description }: Props) {
