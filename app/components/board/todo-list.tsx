@@ -115,7 +115,7 @@ export default function TodoList() {
     });
 
     setTimeout(async () => {
-      await completeList(id, filteredlist.complete);
+      await completeList(id);
       setAnimatingTodo(null);
     }, 300);
   };

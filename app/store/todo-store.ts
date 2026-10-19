@@ -22,25 +22,19 @@ interface State {
     message: string | null;
   };
   setLists: (lists: Todo[]) => void;
-  setList: (item: Todo) => void;
-  updateList: (updatedTodo: Todo) => void;
-  removeList: (id: Todo["id"]) => void;
-  toggleComplete: (id: Todo["id"], complete: Todo["complete"]) => void;
+  setList: (item: Todo) => Promise<void>;
+  updateList: (updatedTodo: Todo) => Promise<void>;
+  removeList: (id: Todo["id"]) => Promise<void>;
+  toggleComplete: (id: Todo["id"]) => Promise<void>;
   loadTodos: () => Promise<void>;
 }
 
-export const useTodoStore = create<State>((set) => ({
-  lists: [],
-  loaded: false,
-  error: {
-    state: false,
-    message: null,
-  },
-  setLists: (lists) => set({ lists }),
-  setList: async (item) => {
-    const previousLists = useTodoStore.getState().lists;
-    const nextLists = [...previousLists, item];
+export const useTodoStore = create<State>((set, get) => {
+  const saveLocalTodos = (lists: Todo[]) => {
+    localStorage.setItem("todo-list", JSON.stringify(lists));
+  };
 
+  const runOptimisticUpdate = async ({ previousLists, nextLists, saveForUser, errorMessage }: { previousLists: Todo[]; nextLists: Todo[]; saveForUser: () => Promise<unknown>; errorMessage: string }) => {
     set({ lists: nextLists });
 
     try {
@@ -49,139 +43,110 @@ export const useTodoStore = create<State>((set) => ({
       } = await supabase.auth.getUser();
 
       if (user) {
-        await createTodo(item);
+        await saveForUser();
       } else {
-        localStorage.setItem("todo-list", JSON.stringify(nextLists));
+        saveLocalTodos(nextLists);
       }
     } catch (error) {
       set({ lists: previousLists });
-      console.error(`할 일 추가 실패 : ${error}`);
+      console.error(`${errorMessage} : ${error}`);
     }
-  },
-  updateList: async (updatedTodo) => {
-    const previousLists = useTodoStore.getState().lists;
+  };
 
-    const nextLists = previousLists.map((list) => (list.id === updatedTodo.id ? updatedTodo : list));
+  return {
+    lists: [],
+    loaded: false,
+    error: {
+      state: false,
+      message: null,
+    },
+    setLists: (lists) => set({ lists }),
+    setList: async (item) => {
+      const previousLists = get().lists;
+      const nextLists = [...previousLists, item];
 
-    set({ lists: nextLists });
+      await runOptimisticUpdate({ previousLists, nextLists, saveForUser: () => createTodo(item), errorMessage: "할 일 추가 실패" });
+    },
+    updateList: async (updatedTodo) => {
+      const previousLists = get().lists;
+      const nextLists = previousLists.map((list) => (list.id === updatedTodo.id ? updatedTodo : list));
 
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        await updateTodo(updatedTodo.id, updatedTodo.content, updatedTodo.priority, updatedTodo.date, updatedTodo.start_time, updatedTodo.end_time, updatedTodo.all_day);
-      } else {
-        localStorage.setItem("todo-list", JSON.stringify(nextLists));
-      }
-    } catch (error) {
-      set({ lists: previousLists });
-      console.error(`할 일 수정 실패: ${error}`);
-    }
-  },
-  removeList: async (id) => {
-    const previousLists = useTodoStore.getState().lists;
-    const nextLists = previousLists.filter((list) => list.id !== id);
-
-    set({ lists: nextLists });
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        await deleteTodo(id);
-      } else {
-        localStorage.setItem("todo-list", JSON.stringify(nextLists));
-      }
-    } catch (error) {
-      set({ lists: previousLists });
-      console.error(`할 일 추가 실패 : ${error}`);
-    }
-  },
-  toggleComplete: async (id) => {
-    const previousLists = useTodoStore.getState().lists;
-    const target = previousLists.find((list) => list.id === id);
-
-    if (!target) return;
-
-    const complete = !target?.complete;
-
-    const nextLists = previousLists.map((list) => (list.id === id ? { ...list, complete } : list));
-
-    set({ lists: nextLists });
-
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        await completeTodo(id, complete);
-      } else {
-        localStorage.setItem("todo-list", JSON.stringify(nextLists));
-      }
-    } catch (error) {
-      set({ lists: previousLists });
-      console.error(`할 일 추가 실패 : ${error}`);
-    }
-  },
-  loadTodos: async () => {
-    set({
-      error: {
-        state: false,
-        message: null,
-      },
-    });
-
-    try {
-      const savedLists = localStorage.getItem("todo-list");
-
-      const localTodos: Todo[] = savedLists
-        ? JSON.parse(savedLists).map((list: Todo) => ({
-            ...list,
-            date: new Date(list.date),
-          }))
-        : [];
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        set({
-          lists: localTodos,
-          loaded: true,
-        });
-        return;
-      }
-
-      // if (localTodos.length > 0) {
-      //   const result = await migrateTodos(localTodos);
-
-      //   if (result.isLoggedIn) {
-      //     localStorage.removeItem("todo-list");
-      //   }
-      // }
-
-      const todos = await getTodos();
-
-      set({
-        lists: todos.map((todo) => ({
-          ...todo,
-          date: parseISO(todo.date),
-        })),
-        loaded: true,
+      await runOptimisticUpdate({
+        previousLists,
+        nextLists,
+        saveForUser: () => updateTodo(updatedTodo.id, updatedTodo.content, updatedTodo.priority, updatedTodo.date, updatedTodo.start_time, updatedTodo.end_time, updatedTodo.all_day),
+        errorMessage: "할 일 수정 실패",
       });
-    } catch (error) {
+    },
+    removeList: async (id) => {
+      const previousLists = get().lists;
+      const nextLists = previousLists.filter((list) => list.id !== id);
+
+      await runOptimisticUpdate({
+        previousLists,
+        nextLists,
+        saveForUser: () => deleteTodo(id),
+        errorMessage: "할 일 삭제 실패",
+      });
+    },
+    toggleComplete: async (id) => {
+      const previousLists = get().lists;
+      const target = previousLists.find((list) => list.id === id);
+
+      if (!target) return;
+
+      const complete = !target.complete;
+      const nextLists = previousLists.map((list) => (list.id === id ? { ...list, complete } : list));
+
+      await runOptimisticUpdate({ previousLists, nextLists, saveForUser: () => completeTodo(id, complete), errorMessage: "완료 체크 실패" });
+    },
+    loadTodos: async () => {
       set({
-        loaded: true,
         error: {
-          state: true,
-          message: error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.",
+          state: false,
+          message: null,
         },
       });
-    }
-  },
-}));
+
+      try {
+        const savedLists = localStorage.getItem("todo-list");
+        const localTodos: Todo[] = savedLists
+          ? JSON.parse(savedLists).map((list: Todo) => ({
+              ...list,
+              date: new Date(list.date),
+            }))
+          : [];
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          set({
+            lists: localTodos,
+            loaded: true,
+          });
+          return;
+        }
+
+        const todos = await getTodos();
+
+        set({
+          lists: todos.map((todo) => ({
+            ...todo,
+            date: parseISO(todo.date),
+          })),
+          loaded: true,
+        });
+      } catch (error) {
+        set({
+          loaded: true,
+          error: {
+            state: true,
+            message: error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.",
+          },
+        });
+      }
+    },
+  };
+});
