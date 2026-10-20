@@ -26,7 +26,7 @@ export interface TodoFieldsValue {
   allDay: boolean;
 }
 
-export interface TodoFieldsErrors {
+export interface TodoFieldsValidity {
   content: boolean;
   priority: boolean;
   date: boolean;
@@ -44,19 +44,19 @@ interface TodoFieldsHandlers {
 
 interface TodoInputFieldsProps {
   value: TodoFieldsValue;
-  errors?: TodoFieldsErrors;
+  validity?: TodoFieldsValidity;
   showErrors?: boolean;
   datePickerOpen: boolean;
   on: TodoFieldsHandlers;
 }
 
-const emptyErrors: TodoFieldsErrors = {
+const emptyValidity: TodoFieldsValidity = {
   content: true,
   priority: true,
   date: true,
 };
 
-export default function TodoInputFields({ value, errors = emptyErrors, showErrors = false, datePickerOpen, on }: TodoInputFieldsProps) {
+export default function TodoInputFields({ value, validity = emptyValidity, showErrors = false, datePickerOpen, on }: TodoInputFieldsProps) {
   return (
     <>
       <div>
@@ -67,7 +67,7 @@ export default function TodoInputFields({ value, errors = emptyErrors, showError
           value={value.content}
           onChange={on.contentChange}
         />
-        {showErrors && !errors.content && !value.content && <p className="mt-1 text-[12px] text-red-400 font-medium">할 일을 입력해주세요.</p>}
+        {showErrors && !validity.content && <p className="mt-1 text-[12px] text-red-400 font-medium">할 일을 입력해주세요.</p>}
       </div>
 
       <div className="flex gap-x-2">
@@ -87,7 +87,7 @@ export default function TodoInputFields({ value, errors = emptyErrors, showError
               </SelectGroup>
             </SelectContent>
           </Select>
-          {showErrors && !errors.priority && !value.priority && <p className="mt-1 text-[12px] text-red-400 font-medium overflow-hidden">우선순위를 선택해주세요.</p>}
+          {showErrors && !validity.priority && <p className="mt-1 text-[12px] text-red-400 font-medium overflow-hidden">우선순위를 선택해주세요.</p>}
         </div>
 
         <div className="w-[calc(50%-4px)]">
@@ -112,7 +112,7 @@ export default function TodoInputFields({ value, errors = emptyErrors, showError
               <Calendar id="date" mode="single" selected={value.date} onSelect={on.dateChange} defaultMonth={value.date} locale={ko} disabled={{ before: new Date() }} />
             </PopoverContent>
           </Popover>
-          {showErrors && !errors.date && !value.date && <p className="mt-1 text-[12px] text-red-400 font-medium">날짜를 선택해주세요.</p>}
+          {showErrors && !validity.date && <p className="mt-1 text-[12px] text-red-400 font-medium">날짜를 선택해주세요.</p>}
         </div>
       </div>
 

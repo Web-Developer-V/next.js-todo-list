@@ -1,10 +1,11 @@
-import React, { useState } from "react";
-import { useTodoStore } from "@/app/store/todo-store";
+import type { FormEvent } from "react";
+
+import { useTodoStore, type Todo } from "@/app/store/todo-store";
 import { useModalStore } from "@/app/store/modal-store";
 
-import ListModal from "./list-modal";
-
 import TodoInputFields from "../board/todo-input-fields";
+import { useTodoForm } from "@/app/hooks/use-todo-form";
+import ListModal from "./list-modal";
 
 interface Props {
   listId: string | number;
@@ -12,101 +13,58 @@ interface Props {
 
 export default function ListEdit({ listId }: Props) {
   const matchedList = useTodoStore((state) => state.lists.find((list) => list.id === listId));
-  const updateTodo = useTodoStore((state) => state.updateList);
-  const close = useModalStore((state) => state.setIsClose);
-
-  const [content, setContent] = useState(matchedList?.content ?? "");
-  const [priority, setPriority] = useState(matchedList?.priority ?? "");
-  const [date, setDate] = useState<Date | undefined>(matchedList?.date ?? new Date());
-  const [startTime, setStartTime] = useState(matchedList?.start_time ?? "");
-  const [endTime, setEndTime] = useState(matchedList?.end_time ?? "");
-  const [allDay, setAllDay] = useState(matchedList?.all_day ?? false);
-  const [open, setOpen] = useState(false);
-
-  const [validate, setValidate] = useState({
-    content_validate: false,
-    priority_validate: false,
-    date_validate: false,
-  });
-  const [validateSentence, setValidateSentence] = useState(false);
 
   if (!matchedList) return null;
 
-  const updateListHandler = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setValidateSentence(true);
+  return <ListEditForm list={matchedList} />;
+}
 
-    const trimmedContent = content?.trim();
+function ListEditForm({ list }: { list: Todo }) {
+  const updateTodo = useTodoStore((state) => state.updateList);
+  const close = useModalStore((state) => state.setIsClose);
+  const form = useTodoForm({
+    content: list.content,
+    priority: list.priority,
+    startTime: list.start_time ?? "",
+    endTime: list.end_time ?? "",
+    date: list.date,
+    allDay: list.all_day ?? false,
+  });
 
-    if (!trimmedContent) return;
+  const updateListHandler = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!form.submitAttempt()) return;
 
     close();
 
     await updateTodo({
-      ...matchedList,
-      content: trimmedContent,
-      priority,
-      date: date ?? new Date(),
-      start_time: startTime,
-      end_time: endTime,
-      all_day: allDay,
+      ...list,
+      content: form.values.content.trim(),
+      priority: form.values.priority,
+      date: form.values.date as Date,
+      start_time: form.values.startTime,
+      end_time: form.values.endTime,
+      all_day: form.values.allDay,
     });
-  };
-
-  const allDayCheckedHandler = (checked: boolean) => {
-    setAllDay(checked);
-    setStartTime("");
-    setEndTime("");
-  };
-
-  const contentChangeHandler = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setContent(e.target.value);
-    setValidate((prev) => ({
-      ...prev,
-      content_validate: e.target.value !== "",
-    }));
-  };
-
-  const priorityChangeHandler = (value: string) => {
-    setPriority(value);
-    setValidate((prev) => ({
-      ...prev,
-      priority_validate: value !== "",
-    }));
-  };
-
-  const dateChangeHandler = (date: Date | undefined) => {
-    setDate(date);
-    setOpen(false);
-    setValidate((prev) => ({
-      ...prev,
-      date_validate: date !== undefined,
-    }));
-  };
-
-  const inputValue = { content, priority, startTime, endTime, date, allDay };
-  const inputErrors = {
-    content: validate.content_validate,
-    priority: validate.priority_validate,
-    date: validate.date_validate,
   };
 
   return (
     <ListModal>
       <form onSubmit={updateListHandler} className="flex flex-col gap-y-3">
         <TodoInputFields
-          value={inputValue}
-          showErrors={validateSentence}
-          errors={inputErrors}
-          datePickerOpen={open}
+          value={form.values}
+          showErrors={form.showErrors}
+          validity={form.validity}
+          datePickerOpen={form.datePickerOpen}
           on={{
-            contentChange: contentChangeHandler,
-            priorityChange: priorityChangeHandler,
-            dateChange: dateChangeHandler,
-            startTimeChange: (e) => setStartTime(e.target.value),
-            endTimeChange: (e) => setEndTime(e.target.value),
-            allDayChange: allDayCheckedHandler,
-            datePickerOpenChange: setOpen,
+            contentChange: form.contentChange,
+            priorityChange: form.priorityChange,
+            dateChange: form.dateChange,
+            startTimeChange: form.startTimeChange,
+            endTimeChange: form.endTimeChange,
+            allDayChange: form.allDayChange,
+            datePickerOpenChange: form.setDatePickerOpen,
           }}
         />
         <div className="flex justify-end gap-x-2.5">
